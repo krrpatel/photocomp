@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Photo Compressor</title>
+  <title>Force Photo Compressor</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -55,10 +55,6 @@
       margin: 0 auto;
     }
 
-    #qualitySlider {
-      width: 100%;
-    }
-
     .images {
       display: flex;
       justify-content: space-between;
@@ -69,6 +65,12 @@
       max-width: 45%;
       border: 1px solid #ddd;
       border-radius: 5px;
+    }
+
+    .image-info {
+      font-size: 14px;
+      color: #555;
+      margin-top: 10px;
     }
 
     button {
@@ -84,18 +86,14 @@
 </head>
 <body>
   <div class="container">
-    <h1>Photo Compressor</h1>
-    
+    <h1>Force Photo Compressor</h1>
+
     <div class="upload-section">
       <label for="fileInput">Upload an Image:</label>
       <input type="file" id="fileInput" accept="image/*">
     </div>
 
     <div class="compression-options">
-      <label for="qualitySlider">Compression Quality:</label>
-      <input type="range" id="qualitySlider" min="10" max="100" value="80">
-      <span id="qualityValue">80%</span>
-
       <label for="sizeInput">Desired Size:</label>
       <input type="number" id="sizeInput" placeholder="Enter size">
       <select id="sizeUnit">
@@ -104,7 +102,7 @@
       </select>
     </div>
 
-    <button id="compressBtn">Compress</button>
+    <button id="compressBtn">Force Compress</button>
 
     <div class="preview-section">
       <h2>Before and After</h2>
@@ -118,6 +116,7 @@
           <img id="compressedImage" src="" alt="Compressed Preview">
         </div>
       </div>
+      <p id="compressedSize" class="image-info"></p>
     </div>
 
     <button id="downloadBtn" style="display: none;">Download Compressed Image</button>
@@ -125,23 +124,17 @@
 
   <script>
     const fileInput = document.getElementById("fileInput");
-    const qualitySlider = document.getElementById("qualitySlider");
-    const qualityValue = document.getElementById("qualityValue");
     const sizeInput = document.getElementById("sizeInput");
     const sizeUnit = document.getElementById("sizeUnit");
     const compressBtn = document.getElementById("compressBtn");
     const downloadBtn = document.getElementById("downloadBtn");
     const originalImage = document.getElementById("originalImage");
     const compressedImage = document.getElementById("compressedImage");
+    const compressedSize = document.getElementById("compressedSize");
 
     let originalFile, compressedBlob;
 
-    // Update quality percentage display
-    qualitySlider.addEventListener("input", () => {
-      qualityValue.textContent = `${qualitySlider.value}%`;
-    });
-
-    // Display original image
+    // Display the uploaded image
     fileInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -154,14 +147,13 @@
       }
     });
 
-    // Compress image
+    // Compress image to desired size
     compressBtn.addEventListener("click", async () => {
-      if (!originalFile) {
-        alert("Please upload an image first!");
+      if (!originalFile || !sizeInput.value) {
+        alert("Please upload an image and enter a desired size!");
         return;
       }
 
-      const quality = qualitySlider.value / 100;
       const desiredSize =
         sizeUnit.value === "MB"
           ? sizeInput.value * 1024 * 1024
@@ -170,30 +162,41 @@
       const img = new Image();
       img.src = URL.createObjectURL(originalFile);
 
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
+      img.onload = async () => {
+        let quality = 1.0; // Start with the highest quality
+        let currentBlob;
 
-        canvas.width = img.width;
-        canvas.height = img.height;
+        while (quality > 0) {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
 
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.width = img.width;
+          canvas.height = img.height;
 
-        // Compress image to desired quality
-        canvas.toBlob(
-          (blob) => {
-            compressedBlob = blob;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            if (blob.size <= desiredSize || !sizeInput.value) {
-              compressedImage.src = URL.createObjectURL(blob);
-              downloadBtn.style.display = "block";
-            } else {
-              alert("Desired size cannot be achieved. Please adjust settings.");
-            }
-          },
-          "image/jpeg",
-          quality
-        );
+          currentBlob = await new Promise((resolve) =>
+            canvas.toBlob(resolve, "image/jpeg", quality)
+          );
+
+          if (currentBlob.size <= desiredSize) {
+            break;
+          }
+
+          quality -= 0.1; // Reduce quality for the next iteration
+        }
+
+        if (currentBlob.size > desiredSize) {
+          alert("Unable to compress to the exact size. Compressed to the closest possible size.");
+        }
+
+        compressedBlob = currentBlob;
+        compressedImage.src = URL.createObjectURL(compressedBlob);
+
+        // Display compressed image size
+        compressedSize.textContent = `Compressed Size: ${(compressedBlob.size / 1024).toFixed(2)} KB`;
+
+        downloadBtn.style.display = "block";
       };
     });
 
